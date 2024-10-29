@@ -1,0 +1,44 @@
+{
+    "allfriendrequest": [
+        {
+            "mode": "",
+            "user_info": {
+                "user_id": "jyid_15900620080",
+                "user_nickname": "",
+                "user_sex": "",
+                "user_avatar": null,
+                "user_area": ""
+            },
+            "message": [
+                {
+                    "user": "",
+                    "content": ""
+                },
+                {
+                    "user": "",
+                    "content": ""
+                }
+            ]
+        },
+        {
+            "mode": "",
+            "user_info": {
+                "user_id": "jyid_15900620080",
+                "user_nickname": "",
+                "user_sex": "",
+                "user_avatar": null,
+                "user_area": ""
+            },
+            "message": [
+                {
+                    "user": "",
+                    "content": ""
+                },
+                {
+                    "user": "",
+                    "content": ""
+                }
+            ]
+        }
+    ]
+}

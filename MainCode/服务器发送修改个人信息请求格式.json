@@ -1,0 +1,10 @@
+{
+    "type":"MODIFYPERSONALINFO",
+    "user_info": {
+        "user_id": "",
+        "user_nickname": "",
+        "user_sex": "",
+        "user_avatar": "",
+        "user_area": ""
+    }
+}

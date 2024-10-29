@@ -1,0 +1,11 @@
+{
+    "type": "FRIENDCHAT",
+    "friendChatId": "",
+    "source": "",
+    "target": "",
+    "friendChatMessage": {
+        "source": "",
+        "content": "",
+        "timestamp": ""
+    }
+}
