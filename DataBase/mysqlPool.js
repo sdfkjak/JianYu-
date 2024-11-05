@@ -29,11 +29,9 @@ function getUserComInfo(id) {
                         console.log(result);
                         if (result.length != 0) {
                             conn.release();
-                            console.log("111");
                             result = result[0]
                             resolve(result); // 将结果传递给Promise链的后续处理者  
                         } else {
-                            console.log("222");
                             const querySql_user_phone = 'SELECT user_id, user_nickname, user_sex, user_area FROM user_info WHERE user_phone = ?';
                             conn.query(querySql_user_phone, [id], (err, result) => {
                                 conn.release(); // 无论是否发生错误，都释放连接 
@@ -41,6 +39,45 @@ function getUserComInfo(id) {
                                     reject(new Error('数据库查询失败'));
                                 } else {
                                     result = result[0]
+                                    resolve(result); // 将结果传递给Promise链的后续处理者  
+                                }
+                            })
+                        }
+                    }
+                });
+            }
+        });
+    });
+}
+
+function getUserDetailInfo(id) {
+    return new Promise((resolve, reject) => {
+        pool.getConnection((err, conn) => {
+            if (err) {
+                reject(new Error('数据库连接失败'));
+            } else {
+                const querySql_user_id = 'SELECT user_id, user_nickname, user_sex, user_area, friendChatId FROM user_info WHERE user_id = ?';
+                conn.query(querySql_user_id, [id], (err, result) => {
+                    if (err) {
+                        conn.release();
+                        reject(new Error('数据库查询失败'));
+                    } else {
+                        console.log(result);
+                        if (result.length != 0) {
+                            conn.release();
+                            console.log("111");
+                            result = result[0]
+                            resolve(result); // 将结果传递给Promise链的后续处理者  
+                        } else {
+                            console.log("222");
+                            const querySql_user_phone = 'SELECT user_id, user_nickname, user_sex, user_area, friendChatId FROM user_info WHERE user_phone = ?';
+                            conn.query(querySql_user_phone, [id], (err, result) => {
+                                conn.release(); // 无论是否发生错误，都释放连接 
+                                if (err) {
+                                    reject(new Error('数据库查询失败'));
+                                } else {
+                                    result = result[0]
+                                    console.log("asdfasdf", result);
                                     resolve(result); // 将结果传递给Promise链的后续处理者  
                                 }
                             })
@@ -78,13 +115,15 @@ function updateUserInfo(id, item, value) {
     });
 }
 
-function insertUserInfo(id, password, nickname, phone){
+function insertUserInfo(id, password, nickname, phone, chatid){
     return new Promise((resolve, reject) => {
         pool.getConnection((err, conn) => {
             if(err) reject("连接失败")
-                insertSql = `insert into user_info (user_id, user_password, user_nickname, user_phone) values(?, ?, ?, ?)`
-                conn.query(insertSql, [id, password, nickname, phone], (err, result) => {
-                    if(err) reject("插入失败")
+                insertSql = `insert into user_info (user_id, user_password, user_nickname, user_phone, friendChatId) values(?, ?, ?, ?, ?)`
+                conn.query(insertSql, [id, password, nickname, phone, chatid], (err, result) => {
+                    if(err){
+                      console.log(err)
+                    } 
                     resolve(true)
                 })
         })
@@ -116,6 +155,7 @@ function generateUniqueId(){
 module.exports = {
     pool,
     getUserComInfo,
+    getUserDetailInfo,
     updateUserInfo,
     insertUserInfo,
     isUserExist,

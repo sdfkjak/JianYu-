@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { WebSocketServer } from 'ws';
 import Redis from 'ioredis';
-import { getUserComInfo, updateUserInfo } from '../DataBase/mysqlPool.js';
+import { getUserComInfo, getUserDetailInfo, updateUserInfo } from '../DataBase/mysqlPool.js';
 import { stringify, v4 as uuidv4 } from 'uuid';
 import { timeStamp } from 'console';
 
@@ -184,7 +184,7 @@ wss.on('connection', function connection(ws) {
           console.log(dataJson)
           if ("needInit" in dataJson && dataJson.needInit == true) {
             console.log("需要初始化");
-            getUserComInfo(dataJson.jyId)
+            getUserDetailInfo(dataJson.jyId)
               .then(user_info => {
                 console.log(user_info)
                 sendMessageToClient(dataJson.jyId, JSON.stringify({ "type": "USERINIT", "userInfo": user_info }));

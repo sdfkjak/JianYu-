@@ -6,6 +6,7 @@ var mysqlPool = require('../DataBase/mysqlPool');
 var checkInput = require('./checkInput')
 const multer = require('multer');
 var app = express();
+const { v4: uuidv4 } = require('uuid');
 
 var urlencodedParser = bodyParser.urlencoded({ extended: false })
 
@@ -42,7 +43,8 @@ app.post('/register', upload, (req, res) => {
          if ('password' in userInfoJson && 'phone' in userInfoJson && checkInput(userInfoJson.password, userInfoJson.phone)) {
             mysqlPool.generateUniqueId()
                .then(jyId => {
-                  mysqlPool.insertUserInfo(jyId, userInfoJson.password, userInfoJson.nickname, userInfoJson.phone)
+                  const Chatuuid = uuidv4();
+                  mysqlPool.insertUserInfo(jyId, userInfoJson.password, userInfoJson.nickname, userInfoJson.phone, Chatuuid)
                      .then(() => {
                         if(req.file && req.file.size > 0){
                            try {
