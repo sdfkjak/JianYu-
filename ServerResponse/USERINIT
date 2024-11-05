@@ -1,0 +1,17 @@
+//一个json一个buffer  
+{ 
+  "type": "USERINIT", 
+  "userInfo": {
+    "user_id": "jyid_ab9bb632e98",
+    "user_nickname": "哈哈",
+    "user_sex": "",
+    "user_area": ""
+  }
+}
+
+{
+  
+}
+
+
+

@@ -12,9 +12,9 @@ const redisClient = new Redis();
 const socketclients = new Map();
 
 wss.on('connection', function connection(ws) {
-  console.log("client error");
   const clientId = generateClientId()
   socketclients.set(clientId, ws)
+  console.log(clientId)
 
   ws.on('error', function error() {
     console.log("client error");
@@ -24,6 +24,7 @@ wss.on('connection', function connection(ws) {
     try {
       let dataJson = JSON.parse(data)
       console.log('received: %s', data);
+      console.log('received: %s', dataJson);
       switch (dataJson.type) {
         case "FRIENDREQUEST":
           const uuid = uuidv4();
@@ -99,7 +100,7 @@ wss.on('connection', function connection(ws) {
                 friendChatId: friendChatuuid,
                 source: dataJson.source,
                 target: dataJson.target,
-                friendChatMessage: []
+                chatMessage: []
               })
               return Promise.all([redisClient.zadd(`chatapp:${dataJson.target}:friendchat`, 1, friendChatuuid),
               redisClient.zadd(`chatapp:${dataJson.source}:friendchat`, 1, friendChatuuid),
@@ -112,7 +113,7 @@ wss.on('connection', function connection(ws) {
                     user_info.friendChatId = dataJson.friendChatuuid;
                     const friendBaseInfo = {
                       type: "ADDFRIENDINFO",
-                      newFriendInfo: [user_info]
+                      newFriendInfo: user_info
                     }
                     sendMessageToClient(dataJson.source, JSON.stringify(friendBaseInfo))
                     sendMessageToClient(dataJson.source, buildBufferData("ADDFRIENDINFO", dataJson.target, null, getUserAvatar(user_info.user_id)))
@@ -124,7 +125,7 @@ wss.on('connection', function connection(ws) {
                     user_info.friendChatId = dataJson.friendChatuuid;
                     const friendBaseInfo = {
                       type: "ADDFRIENDINFO",
-                      newFriendInfo: [user_info]
+                      newFriendInfo: user_info
                     }
                     sendMessageToClient(dataJson.target, JSON.stringify(friendBaseInfo))
                     sendMessageToClient(dataJson.target, buildBufferData("ADDFRIENDINFO", dataJson.source, null, getUserAvatar(user_info.user_id)))
@@ -145,23 +146,24 @@ wss.on('connection', function connection(ws) {
               return redisClient.get(`chatapp:chatpool:privatechat:friendchat:${dataJson.friendChatId}`)
             })
             .then(stringifyJson => {
-              // console.log("得到", stringifyJson)
+              console.log("接受", dataJson.chatMessage)
+              console.log("得到", stringifyJson)
               const savedFriendChatJson = JSON.parse(stringifyJson)
               if (!((savedFriendChatJson.source === dataJson.source && savedFriendChatJson.target === dataJson.target) || (savedFriendChatJson.source === dataJson.target && savedFriendChatJson.target === dataJson.source))) {
                 throw Error(`消息目标不存在${savedFriendChatJson}`)
               }
-              savedFriendChatJson.friendChatMessage.push(dataJson.friendChatMessage)
-              // console.log("存入", JSON.stringify(savedFriendChatJson))
+              savedFriendChatJson.chatMessage.push(dataJson.chatMessage)
+              console.log("存入", JSON.stringify(savedFriendChatJson))
               redisClient.set(`chatapp:chatpool:privatechat:friendchat:${dataJson.friendChatId}`, JSON.stringify(savedFriendChatJson))
               if (clientExist(dataJson.target)) {
                 const sendFriendChatMessage = {
                   type: "FRIENDCHAT",
                   FRIENDCHAT: [{
                     chatTarget: dataJson.source,
-                    friendChatMessage: [dataJson.friendChatMessage]
+                    chatMessage: [dataJson.chatMessage]
                   }]
                 }
-                console.log("dataJson.friendChatMessage ", dataJson.friendChatMessage)
+                console.log("dataJson.chatMessage ", dataJson.chatMessage)
                 sendMessageToClient(dataJson.target, JSON.stringify(sendFriendChatMessage))
               }
             })
@@ -180,10 +182,11 @@ wss.on('connection', function connection(ws) {
             console.log("欢迎用户" + dataJson.jyId);
           }
           console.log(dataJson)
-          if ("needInfo" in dataJson && dataJson.needInfo == true) {
+          if ("needInit" in dataJson && dataJson.needInit == true) {
             console.log("需要初始化");
             getUserComInfo(dataJson.jyId)
               .then(user_info => {
+                console.log(user_info)
                 sendMessageToClient(dataJson.jyId, JSON.stringify({ "type": "USERINIT", "userInfo": user_info }));
                 sendMessageToClient(dataJson.jyId, buildBufferData("USERINIT", dataJson.jyId, null, getUserAvatar(dataJson.jyId)));
               })
@@ -225,11 +228,15 @@ wss.on('connection', function connection(ws) {
             .then(user_info => {
               if (user_info) {
                 sendMessageToClient(dataJson.source, JSON.stringify({ "type": "QUERYUSERRESULT", "userInfo": user_info }))
-                sendMessageToClient(dataJson.source, buildBufferData("QUERYUSERRESULT", dataJson.source, null, getUserAvatar(user_info.user_id)))
+                sendMessageToClient(dataJson.source, buildBufferData("QUERYUSERRESULT", user_info.user_id, null, getUserAvatar(user_info.user_id)))
               } else {
                 console.log("错误查询QUERYUSER");
               }
             })
+          break;
+        case "GETTIMESTAMP":
+          console.log("收到GETTIMESTAMP");
+          sendMessageToClient(dataJson.source, JSON.stringify({ "type": "RESPONSE_TIMESTAMP", "timestamp": Date.now() }));
           break;
       }
     } catch (err) {
@@ -275,11 +282,14 @@ function dealBufferMessage(buffer) {
 }
 function parseBuffer(messageFieldBuffer) {
   // const messageFieldMap = new Map();
-  const messageFieldString = messageFieldBuffer.toString('utf8');
-  const messageFieldStringArray = messageFieldString.split("|");
+  const messageFieldStringArray = []
+  for (let index = 0; index < 5; index++) {
+    const fieldBuffer = messageFieldBuffer.slice(30 * index, 30 * (index + 1))
+    messageFieldStringArray.push(fieldBuffer.toString('utf8'))
+    console.log(fieldBuffer.toString('utf8'))
+  }
 
   //类型，来源， 目标， 时间戳， FriendChatId
-  messageFieldStringArray.pop();
   return messageFieldStringArray;
 }
 function saveFriendChatImageToRedisAndSendIfOnline(source, target, timestamp, friendChatId, imgBuffer) {
@@ -304,7 +314,7 @@ function saveFriendChatImageToRedisAndSendIfOnline(source, target, timestamp, fr
         "type": "FRIENDCHATIMAGEMESSAGE"
       }
       savedFriendChatJson.friendChatMessage.push(friendChatImageMessage)
-      
+
       redisClient.set(`chatapp:chatpool:privatechat:friendchat:${friendChatId}`, JSON.stringify(savedFriendChatJson))
       console.log("cunzaima1");
       if (clientExist(target)) {
@@ -318,12 +328,11 @@ function saveFriendChatImageToRedisAndSendIfOnline(source, target, timestamp, fr
           }]
         }
         console.log("存入", "在线")
-        sendMessageToClient(target,JSON.stringify(sendMessage))
+        sendMessageToClient(target, JSON.stringify(sendMessage))
         sendMessageToClient(target, buildBufferData("FRIENDCHATIMAGEMESSAGE", source, timestamp, imgBuffer))
       }
     })
 }
-
 function saveUserAvatar(jyid, avatarBuffer) {
   if (!fs.existsSync(`C:\\Users\\zzq\\Desktop\\ChatAppData\\UserAvatar`)) {
     fs.mkdir(`C:\\Users\\zzq\\Desktop\\ChatAppData\\UserAvatar`, { recursive: true }, err => {
@@ -439,11 +448,10 @@ function loginInit(account) {
       dataJson.type = "FRIENDAPPLICATIONINIT";
       const friendApplicationAvatarBufferList = [];
       jsons[0].forEach(friendRequestDatas => {
-
         friendApplicationAvatarBufferList.push(buildBufferData("FRIENDAPPLICATIONINIT", friendRequestDatas.user_info.user_id, null, getUserAvatar(friendRequestDatas.user_info.user_id)))
       })
       dataJson.FRIENDAPPLICATIONINITLIST = jsons[0]
-      // console.log("发送的消息", JSON.stringify(dataJson))
+      console.log("发送的消息", JSON.stringify(dataJson))
       sendMessageToClient(account, JSON.stringify(dataJson))
       friendApplicationAvatarBufferList.forEach(friendApplicationAvatarBuffer => {
         sendMessageToClient(account, friendApplicationAvatarBuffer)
