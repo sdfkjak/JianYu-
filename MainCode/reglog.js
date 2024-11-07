@@ -13,6 +13,7 @@ var urlencodedParser = bodyParser.urlencoded({ extended: false })
 const upload = multer({
    dest: 'C:\\Users\\zzq\\Desktop\\ChatAppData\\UserAvatar\\',
    fileFilter: function (req, file, cb) {
+      console.log("asdfasdf")
       mysqlPool.isUserExist(req.body.phone, "user_phone")
          .then(isExist => {
             if (isExist) {
@@ -25,6 +26,7 @@ const upload = multer({
             req.isConn = true
          })
          .catch(err => {
+            console.log(err)
             req.isConn = false
          })
 

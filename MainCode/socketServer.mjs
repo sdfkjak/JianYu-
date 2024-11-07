@@ -67,7 +67,7 @@ wss.on('connection', function connection(ws) {
                       user_info: user_info,
                       //虽然就一句但为了客户端改成了[]
                       message: [{
-                        user: dataJson.source,
+                        source: dataJson.source,
                         content: dataJson.content
                       }]
                     }
@@ -157,13 +157,13 @@ wss.on('connection', function connection(ws) {
               redisClient.set(`chatapp:chatpool:privatechat:friendchat:${dataJson.friendChatId}`, JSON.stringify(savedFriendChatJson))
               if (clientExist(dataJson.target)) {
                 const sendFriendChatMessage = {
-                  type: "FRIENDCHAT",
+                  type: "FRIEND_CHAT",
                   FRIENDCHAT: [{
-                    chatTarget: dataJson.source,
+                    source: dataJson.source,
                     chatMessage: [dataJson.chatMessage]
                   }]
                 }
-                console.log("dataJson.chatMessage ", dataJson.chatMessage)
+                console.log("dataJson.chatMessage ", sendFriendChatMessage)
                 sendMessageToClient(dataJson.target, JSON.stringify(sendFriendChatMessage))
               }
             })
@@ -285,53 +285,24 @@ function parseBuffer(messageFieldBuffer) {
   const messageFieldStringArray = []
   for (let index = 0; index < 5; index++) {
     const fieldBuffer = messageFieldBuffer.slice(30 * index, 30 * (index + 1))
-    messageFieldStringArray.push(fieldBuffer.toString('utf8'))
-    console.log(fieldBuffer.toString('utf8'))
+    let fieldString = fieldBuffer.toString('utf8');
+    for(let i = 0; i < fieldString.length; i++){
+      if(fieldString.charCodeAt(i) === 0){
+        fieldString = fieldString.slice(0, i)
+        break;
+      }
+    }
+    messageFieldStringArray.push(fieldString)
+    console.log(fieldString)
   }
 
   //类型，来源， 目标， 时间戳， FriendChatId
   return messageFieldStringArray;
 }
 function saveFriendChatImageToRedisAndSendIfOnline(source, target, timestamp, friendChatId, imgBuffer) {
-  console.log("source", source);
-  redisClient.zrange(`chatapp:${source}:friendchat`, 0, -1)
-    .then(friendChatuuids => {
-      const friendChatuuidMatch = friendChatuuids.find(friendChatuuid => friendChatuuid === friendChatId)
-      if (!friendChatuuidMatch) {
-        throw Error('消息目标不存在friendChatId')
-      }
-      return redisClient.get(`chatapp:chatpool:privatechat:friendchat:${friendChatId}`)
-    })
-    .then(stringifyJson => {
-      const savedFriendChatJson = JSON.parse(stringifyJson)
-      if (!((savedFriendChatJson.source === source && savedFriendChatJson.target === target) || (savedFriendChatJson.source === target && savedFriendChatJson.target === source))) {
-        throw Error(`消息目标不存在${savedFriendChatJson}`)
-      }
-      const friendChatImageMessage = {
-        "content": "",
-        "source": source,
-        "timestamp": timestamp,
-        "type": "FRIENDCHATIMAGEMESSAGE"
-      }
-      savedFriendChatJson.friendChatMessage.push(friendChatImageMessage)
-
-      redisClient.set(`chatapp:chatpool:privatechat:friendchat:${friendChatId}`, JSON.stringify(savedFriendChatJson))
-      console.log("cunzaima1");
-      if (clientExist(target)) {
-        const sendMessage = {
-          "type": 'FRIENDCHAT',
-          "FRIENDCHAT": [{
-            content: '',
-            source: 'jyid_77ba7417fd4',
-            timestamp: timestamp,
-            type: 'FRIENDCHATIMAGEMESSAGE'
-          }]
-        }
-        console.log("存入", "在线")
-        sendMessageToClient(target, JSON.stringify(sendMessage))
-        sendMessageToClient(target, buildBufferData("FRIENDCHATIMAGEMESSAGE", source, timestamp, imgBuffer))
-      }
-    })
+  if (clientExist(target)) {
+    sendMessageToClient(target, buildBufferData("FRIEND_CHAT", source, timestamp, imgBuffer))
+  }
 }
 function saveUserAvatar(jyid, avatarBuffer) {
   if (!fs.existsSync(`C:\\Users\\zzq\\Desktop\\ChatAppData\\UserAvatar`)) {
@@ -417,6 +388,7 @@ function buildBufferData(type, source, timestamp, imgBuffer) {
 function sendMessageToClient(clientId, message) {
   let client = socketclients.get(clientId);
   if (client) {
+    console.log("发送", message)
     client.send(message);
   } else {
     console.error(`Client ${clientId} not found`);
@@ -562,7 +534,7 @@ function messageInit(account) {
               const fileName = files[i].toString();
               const timestamp = fileName.slice(0, fileName.indexOf("."))
               console.log("timestamp", timestamp)
-              sendMessageToClient(account, buildBufferData("FRIENDCHATIMAGEMESSAGE", member, timestamp, data));
+              sendMessageToClient(account, buildBufferData("IMAGE", member, timestamp, data));
             })
           }
         })
