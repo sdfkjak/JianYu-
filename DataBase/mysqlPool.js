@@ -9,7 +9,7 @@ const pool = mysql.createPool({
     port: 3307,
     database: "chatapp", // 数据库名字
     user: "root", // 连接数据库的用户名
-    password: "Clementine", // 连接数据库密码
+    password: "123", // 连接数据库密码
     connectionLimit: 20, // 连接池最大连接数
     multipleStatements: true // 允许执行多条sql语句
 })

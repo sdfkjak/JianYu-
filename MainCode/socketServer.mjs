@@ -4,9 +4,8 @@ import { WebSocketServer } from 'ws';
 import Redis from 'ioredis';
 import { getUserComInfo, getUserDetailInfo, updateUserInfo } from '../DataBase/mysqlPool.js';
 import { stringify, v4 as uuidv4 } from 'uuid';
-import { timeStamp } from 'console';
 
-const wss = new WebSocketServer({ port: 8080, host: '172.19.50.90' });
+const wss = new WebSocketServer({ port: 8080, host: '192.168.1.14' });
 const redisClient = new Redis();
 
 const socketclients = new Map();
@@ -14,18 +13,21 @@ const socketclients = new Map();
 wss.on('connection', function connection(ws) {
   const clientId = generateClientId()
   socketclients.set(clientId, ws)
-  console.log(clientId)
-
-  ws.on('error', function error() {
-    console.log("client error");
-  });
+  socketclients.forEach((value, key) => {
+    console.log(`当前存在客户端jyId: ${key}`)
+  })
+  sendMessageToClient(clientId, JSON.stringify({ "type": "RESPONSE_TIMESTAMP", "timestamp": Date.now() }))
 
   ws.on('message', function message(data) {
     try {
       let dataJson = JSON.parse(data)
-      console.log('received: %s', data);
-      console.log('received: %s', dataJson);
+      console.log(`收到${dataJson.type}类型数据`)
       switch (dataJson.type) {
+        case "LOGINSERVER":
+          socketIdInit(clientId, dataJson.source)
+            socketclients.forEach((value, key) => {
+    console.log(`当前存在客户端jyId: ${key}`)
+  })
         case "FRIENDREQUEST":
           const uuid = uuidv4();
           //先在双方friendrequest添加好友请求
@@ -146,14 +148,11 @@ wss.on('connection', function connection(ws) {
               return redisClient.get(`chatapp:chatpool:privatechat:friendchat:${dataJson.friendChatId}`)
             })
             .then(stringifyJson => {
-              console.log("接受", dataJson.chatMessage)
-              console.log("得到", stringifyJson)
               const savedFriendChatJson = JSON.parse(stringifyJson)
               if (!((savedFriendChatJson.source === dataJson.source && savedFriendChatJson.target === dataJson.target) || (savedFriendChatJson.source === dataJson.target && savedFriendChatJson.target === dataJson.source))) {
                 throw Error(`消息目标不存在${savedFriendChatJson}`)
               }
               savedFriendChatJson.chatMessage.push(dataJson.chatMessage)
-              console.log("存入", JSON.stringify(savedFriendChatJson))
               redisClient.set(`chatapp:chatpool:privatechat:friendchat:${dataJson.friendChatId}`, JSON.stringify(savedFriendChatJson))
               if (clientExist(dataJson.target)) {
                 const sendFriendChatMessage = {
@@ -163,7 +162,6 @@ wss.on('connection', function connection(ws) {
                     chatMessage: [dataJson.chatMessage]
                   }]
                 }
-                console.log("dataJson.chatMessage ", sendFriendChatMessage)
                 sendMessageToClient(dataJson.target, JSON.stringify(sendFriendChatMessage))
               }
             })
@@ -173,20 +171,11 @@ wss.on('connection', function connection(ws) {
           break;
         case 'INITCLIENT':
           if ("jyId" in dataJson) {
-            socketIdInit(clientId, dataJson.jyId)
-            socketclients.forEach((value, key) => {
-              console.log(`当前存在客户端jyId: ${key}`)
-            })
-            console.log("初始化")
             loginInit(dataJson.jyId, ws);
-            console.log("欢迎用户" + dataJson.jyId);
           }
-          console.log(dataJson)
           if ("needInit" in dataJson && dataJson.needInit == true) {
-            console.log("需要初始化");
             getUserDetailInfo(dataJson.jyId)
               .then(user_info => {
-                console.log(user_info)
                 sendMessageToClient(dataJson.jyId, JSON.stringify({ "type": "USERINIT", "userInfo": user_info }));
                 sendMessageToClient(dataJson.jyId, buildBufferData("USERINIT", dataJson.jyId, null, getUserAvatar(dataJson.jyId)));
               })
@@ -234,13 +223,8 @@ wss.on('connection', function connection(ws) {
               }
             })
           break;
-        case "GETTIMESTAMP":
-          console.log("收到GETTIMESTAMP");
-          sendMessageToClient(dataJson.source, JSON.stringify({ "type": "RESPONSE_TIMESTAMP", "timestamp": Date.now() }));
-          break;
       }
     } catch (err) {
-      // console.log('received: %s', err.message);
       if (err instanceof SyntaxError) {
         dealBufferMessage(data);
       } else {
@@ -254,14 +238,18 @@ wss.on('connection', function connection(ws) {
     socketIdDelete(ws)
     console.log('client disconnected');
   });
+
+    ws.on('error', function error() {
+    console.log("client error");
+  });
 });
 
 function dealBufferMessage(buffer) {
-  const messageFieldStringArray = parseBuffer(buffer.slice(0, 150));
+  const messageFieldStringArray = parseBuffer(buffer.slice(0, 200));
   switch (messageFieldStringArray[0]) {
     case "FRIENDCHAT":
-      saveFriendChatImageToRedisAndSendIfOnline(messageFieldStringArray[1], messageFieldStringArray[2], messageFieldStringArray[3], messageFieldStringArray[4], buffer.slice(150, buffer.length))
-      saveFriendChatImage(buffer.slice(150, buffer.length), messageFieldStringArray[4], messageFieldStringArray[3]);
+      saveFriendChatImageToRedisAndSendIfOnline(messageFieldStringArray[1], messageFieldStringArray[2], messageFieldStringArray[3], messageFieldStringArray[4], buffer.slice(200, buffer.length))
+      saveFriendChatImage(buffer.slice(200, buffer.length), messageFieldStringArray[4], messageFieldStringArray[3]);
       break;
     case "MODIFYPERSONALINFO":
       saveUserAvatar(messageFieldStringArray[1], buffer.slice(150, buffer.length));
@@ -284,7 +272,7 @@ function parseBuffer(messageFieldBuffer) {
   // const messageFieldMap = new Map();
   const messageFieldStringArray = []
   for (let index = 0; index < 5; index++) {
-    const fieldBuffer = messageFieldBuffer.slice(30 * index, 30 * (index + 1))
+    const fieldBuffer = messageFieldBuffer.slice(40 * index, 40 * (index + 1))
     let fieldString = fieldBuffer.toString('utf8');
     for(let i = 0; i < fieldString.length; i++){
       if(fieldString.charCodeAt(i) === 0){
@@ -293,7 +281,6 @@ function parseBuffer(messageFieldBuffer) {
       }
     }
     messageFieldStringArray.push(fieldString)
-    console.log(fieldString)
   }
 
   //类型，来源， 目标， 时间戳， FriendChatId
@@ -301,7 +288,7 @@ function parseBuffer(messageFieldBuffer) {
 }
 function saveFriendChatImageToRedisAndSendIfOnline(source, target, timestamp, friendChatId, imgBuffer) {
   if (clientExist(target)) {
-    sendMessageToClient(target, buildBufferData("FRIEND_CHAT", source, timestamp, imgBuffer))
+    sendMessageToClient(target, buildBufferData("FRIEND_CHAT", friendChatId, timestamp, imgBuffer))
   }
 }
 function saveUserAvatar(jyid, avatarBuffer) {
@@ -353,7 +340,6 @@ function generateClientId() {
 }
 
 function buildBufferData(type, source, timestamp, imgBuffer) {
-  console.log(imgBuffer.length)
   let typeBuffer = null, sourceBuffer = null, timestampBuffer = null, labelBuffer = null, totalBuffer = null;
 
   if (type != null) {
@@ -374,21 +360,19 @@ function buildBufferData(type, source, timestamp, imgBuffer) {
   }
 
   labelBuffer = Buffer.concat([typeBuffer, sourceBuffer, timestampBuffer])
-  console.log(`生成Buffer类型${type}, 来源${source}`);
   if (labelBuffer.length <= 100) {
     labelBuffer = Buffer.concat([labelBuffer, Buffer.alloc(100 - labelBuffer.length)])
   } else (
-    console.log("labelBuffer 怎么会大于100")
+    pass
   )
   totalBuffer = Buffer.concat([labelBuffer, imgBuffer])
-  console.log(totalBuffer.length)
   return totalBuffer
 }
 
 function sendMessageToClient(clientId, message) {
   let client = socketclients.get(clientId);
   if (client) {
-    console.log("发送", message)
+    console.log("发送", clientId,  message)
     client.send(message);
   } else {
     console.error(`Client ${clientId} not found`);
@@ -407,7 +391,8 @@ function socketIdInit(oldId, newId) {
 
 function socketIdDelete(ws) {
   for (let [key, value] of socketclients) {
-    if (value == ws) {
+    if (value === ws) {
+      console.log("删除", key)
       socketclients.delete(key);
     }
   }
@@ -423,7 +408,6 @@ function loginInit(account) {
         friendApplicationAvatarBufferList.push(buildBufferData("FRIENDAPPLICATIONINIT", friendRequestDatas.user_info.user_id, null, getUserAvatar(friendRequestDatas.user_info.user_id)))
       })
       dataJson.FRIENDAPPLICATIONINITLIST = jsons[0]
-      console.log("发送的消息", JSON.stringify(dataJson))
       sendMessageToClient(account, JSON.stringify(dataJson))
       friendApplicationAvatarBufferList.forEach(friendApplicationAvatarBuffer => {
         sendMessageToClient(account, friendApplicationAvatarBuffer)
@@ -432,13 +416,11 @@ function loginInit(account) {
     if (jsons[1] != null && jsons[1].length != 0) {
       const dataJson = {};
       dataJson.type = "FRIENDINIT";
-      console.log("发送的消息", "FRIENDINIT")
       const friendInitAvatarBufferList = [];
       jsons[1].forEach(user_info => {
         friendInitAvatarBufferList.push(buildBufferData("FRIENDINIT", user_info.user_id, null, getUserAvatar(user_info.user_id)))
       })
       dataJson.FRIENDINIT = jsons[1]
-      // console.log("发送的消息", JSON.stringify(dataJson))
       sendMessageToClient(account, JSON.stringify(dataJson))
       friendInitAvatarBufferList.forEach(friendInitAvatarBuffer => {
         sendMessageToClient(account, friendInitAvatarBuffer)
@@ -448,7 +430,6 @@ function loginInit(account) {
       const dataJson = {};
       dataJson.type = "FRIENDCHATINIT";
       dataJson.FRIENDCHATINIT = jsons[2]
-      // console.log("发送的消息", JSON.stringify(dataJson))
       sendMessageToClient(account, JSON.stringify(dataJson))
     }
   })
@@ -518,10 +499,10 @@ function messageInit(account) {
   redisClient.zrange(`chatapp:${account}:friendchat`, 0, -1)
     .then(members => {
       members.forEach(member => {
-        console.log("member", member)
         const folderPath = `C:\\Users\\zzq\\Desktop\\ChatAppData\\${member}`;
         fs.readdir(folderPath, function (err, files) {
           if (err) {
+            console.log(err.toString())
             return;
             // throw new Error("读取文件夹失败")
           }
@@ -530,17 +511,14 @@ function messageInit(account) {
               if (err) {
                 return console.error(err);
               }
-              console.log("data", data)
               const fileName = files[i].toString();
               const timestamp = fileName.slice(0, fileName.indexOf("."))
-              console.log("timestamp", timestamp)
               sendMessageToClient(account, buildBufferData("IMAGE", member, timestamp, data));
             })
           }
         })
       })
     })
-
   return redisClient.zrange(`chatapp:${account}:friendchat`, 0, -1)
     .then(members => {
       return Promise.all(members.map(member => {
@@ -548,8 +526,8 @@ function messageInit(account) {
           .then(stringifyJson => {
             const savedFriendChat = JSON.parse(stringifyJson)
             const friendChatMessageJson = {
-              chatTarget: savedFriendChat.source === account ? savedFriendChat.target : savedFriendChat.source,
-              friendChatMessage: savedFriendChat.friendChatMessage
+              source: savedFriendChat.source === account ? savedFriendChat.target : savedFriendChat.source,
+              chatMessage: savedFriendChat.chatMessage
             }
             return friendChatMessageJson
           })
@@ -592,3 +570,13 @@ function getAllFriendBaseInfo(accounts) {
       return user_infos;
     })
 }
+
+function broadcastTime(){
+  for (const [key, value] of socketclients) {
+    // console.log(`Client ID: ${key}`);
+    // console.log(`WebSocket readyState: ${value.readyState}`);
+    sendMessageToClient(key, JSON.stringify({ "type": "RESPONSE_TIMESTAMP", "timestamp": Date.now() }))
+  }
+}
+
+setInterval(broadcastTime, 10000);
